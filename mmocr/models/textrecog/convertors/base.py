@@ -8,7 +8,7 @@ class BaseConvertor:
     """Convert between text, index and tensor for text recognize pipeline.
 
     Args:
-        dict_type (str): Type of dict, options are 'DICT36', 'DICT37', 'DICT90'
+        dict_type (str): Type of dict, options are 'DICT10', 'DICT36', 'DICT37', 'DICT90'
             and 'DICT91'.
         dict_file (None|str): Character dict file path. If not none,
             the dict_file is of higher priority than dict_type.
@@ -20,6 +20,7 @@ class BaseConvertor:
     lower = False
 
     dicts = dict(
+        DICT10=tuple('0123456789'),
         DICT36=tuple('0123456789abcdefghijklmnopqrstuvwxyz'),
         DICT90=tuple('0123456789abcdefghijklmnopqrstuvwxyz'
                      'ABCDEFGHIJKLMNOPQRSTUVWXYZ!"#$%&\'()'
