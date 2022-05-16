@@ -42,7 +42,8 @@ def warp_img(src_img,
              box,
              jitter_flag=False,
              jitter_ratio_x=0.5,
-             jitter_ratio_y=0.1):
+             jitter_ratio_y=0.1,
+             sort_pts=True):
     """Crop box area from image using opencv warpPerspective w/o box jitter.
 
     Args:
@@ -56,7 +57,8 @@ def warp_img(src_img,
     points_x = [min(max(x, 0), w) for x in box[0:8:2]]
     points_y = [min(max(y, 0), h) for y in box[1:9:2]]
 
-    points_x, points_y = sort_vertex(points_x, points_y)
+    if sort_pts:
+        points_x, points_y = sort_vertex(points_x, points_y)
 
     if jitter_flag:
         box_jitter(
