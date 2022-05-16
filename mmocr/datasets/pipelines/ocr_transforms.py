@@ -157,6 +157,82 @@ class NormalizeOCR:
 
 
 @PIPELINES.register_module()
+class SelectRecSampleOCR:
+    """Randomly select one bbox of those defined in the image."""
+
+    def __call__(self, results):
+        idx = np.random.randint(0, len(results['gt_bboxes']))
+        results['gt_bboxes'] = results['gt_bboxes'][None, idx]
+        results['gt_labels'] = results['gt_labels'][None, idx]
+        results['text'] = results['ann_info']['texts'][idx]
+        return results
+
+
+@PIPELINES.register_module()
+class ExpandBoxOCR:
+    """Expand the defined bboxes by the given values."""
+    def __init__(self, dx, dy) -> None:
+        # TODO: Make dx and dy relative to w and h instead? Or just h?
+        self.dx = dx
+        self.dy = dy
+
+    def __call__(self, results):
+        idx = np.random.randint(0, len(results['gt_bboxes']))
+        res_bbs = []
+        for bb in results['gt_bboxes']:
+            res_bbs.append(bb + np.array([-self.dx,-self.dy, self.dx, self.dy], np.float32))
+        results['gt_bboxes'] = np.asarray(res_bbs)
+        return results
+
+
+@PIPELINES.register_module()
+class OnlineCropV2OCR:
+    """Crop text areas from whole image with bounding box jitter. If no bbox is
+    given, return directly.
+
+    Args:
+        box_keys (list[str]): Keys in results which correspond to RoI bbox.
+        jitter_prob (float): The probability of box jitter.
+        max_jitter_ratio_x (float): Maximum horizontal jitter ratio
+            relative to height.
+        max_jitter_ratio_y (float): Maximum vertical jitter ratio
+            relative to height.
+    """
+
+    def __init__(self,
+                 jitter_prob=0.5,
+                 max_jitter_ratio_x=0.05,
+                 max_jitter_ratio_y=0.02):
+        assert 0 <= jitter_prob <= 1
+        assert 0 <= max_jitter_ratio_x <= 1
+        assert 0 <= max_jitter_ratio_y <= 1
+
+        self.jitter_prob = jitter_prob
+        self.max_jitter_ratio_x = max_jitter_ratio_x
+        self.max_jitter_ratio_y = max_jitter_ratio_y
+
+    def __call__(self, results):
+
+        if 'gt_bboxes' not in results or len(results['gt_bboxes']) != 1:
+            return results
+        minx, miny, maxx, maxy = results['gt_bboxes'][0].tolist()
+        box = [minx, miny, maxx, miny, maxx, maxy, minx, maxy]
+
+        jitter_flag = np.random.random() > self.jitter_prob
+
+        kwargs = dict(
+            jitter_flag=jitter_flag,
+            jitter_ratio_x=self.max_jitter_ratio_x,
+            jitter_ratio_y=self.max_jitter_ratio_y)
+        crop_img = warp_img(results['img'], box, **kwargs)
+
+        results['img'] = crop_img
+        results['img_shape'] = crop_img.shape
+
+        return results
+
+
+@PIPELINES.register_module()
 class OnlineCropOCR:
     """Crop text areas from whole image with bounding box jitter. If no bbox is
     given, return directly.
