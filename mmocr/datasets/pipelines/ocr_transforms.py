@@ -10,9 +10,38 @@ from mmdet.datasets.builder import PIPELINES
 from PIL import Image
 from shapely.geometry import Polygon
 from shapely.geometry import box as shapely_box
+import cv2
 
 import mmocr.utils as utils
 from mmocr.datasets.pipelines.crop import warp_img
+
+
+def _sort_vertex(vertices):
+    assert vertices.ndim == 2
+    assert vertices.shape[-1] == 2
+    N = vertices.shape[0]
+    if N == 0:
+        return vertices
+
+    center = np.mean(vertices, axis=0)
+    directions = vertices - center
+    angles = np.arctan2(directions[:, 1], directions[:, 0])
+    sort_idx = np.argsort(angles)
+    vertices = vertices[sort_idx]
+
+    left_top = np.min(vertices, axis=0)
+    dists = np.linalg.norm(left_top - vertices, axis=-1, ord=2)
+    lefttop_idx = np.argmin(dists)
+    indexes = (np.arange(N, dtype=np.int) + lefttop_idx) % N
+    return vertices[indexes]
+
+
+def sort_vertex(points):
+    """Sort vertex with 8 points [x1 y1 x2 y2 x3 y3 x4 y4]"""
+    assert len(points) == 8
+    vertices = _sort_vertex(np.array(points, dtype=np.float32).reshape(-1, 2))
+    sorted_box = vertices.flatten()
+    return sorted_box
 
 
 @PIPELINES.register_module()
@@ -165,23 +194,31 @@ class SelectRecSampleOCR:
         results['gt_bboxes'] = results['gt_bboxes'][None, idx]
         results['gt_labels'] = results['gt_labels'][None, idx]
         results['text'] = results['ann_info']['texts'][idx]
+        results['poly'] = results['gt_masks'].masks[idx][0]
         return results
 
 
 @PIPELINES.register_module()
 class ExpandBoxOCR:
-    """Expand the defined bboxes by the given values."""
-    def __init__(self, dx, dy) -> None:
-        # TODO: Make dx and dy relative to w and h instead? Or just h?
-        self.dx = dx
-        self.dy = dy
+    """Expand the defined bboxes by the given values.
+    
+    width_expansion_rate and height_expansion_rate are relative to the HEIGHT of the polygon.
+    """
+    def __init__(self, width_expansion_rate, height_expansion_rate) -> None:
+        self.width_expansion_rate = width_expansion_rate
+        self.height_expansion_rate = height_expansion_rate
 
     def __call__(self, results):
-        idx = np.random.randint(0, len(results['gt_bboxes']))
-        res_bbs = []
-        for bb in results['gt_bboxes']:
-            res_bbs.append(bb + np.array([-self.dx,-self.dy, self.dx, self.dy], np.float32))
-        results['gt_bboxes'] = np.asarray(res_bbs)
+        if 'poly' not in results:
+            return results
+        orig_poly = sort_vertex(results['poly'])
+        h = np.linalg.norm(orig_poly[:2]-orig_poly[-2:])
+        dw = self.width_expansion_rate*h
+        dh = self.height_expansion_rate*h
+        (ct, (_w, _h), angle) = cv2.minAreaRect(orig_poly.reshape([-1,2]))
+        _w += dw
+        _h += dh
+        results['poly'] = sort_vertex(cv2.boxPoints((ct, (_w, _h), angle)).flatten()).astype(float).tolist()
         return results
 
 
@@ -212,11 +249,9 @@ class OnlineCropV2OCR:
         self.max_jitter_ratio_y = max_jitter_ratio_y
 
     def __call__(self, results):
-
-        if 'gt_bboxes' not in results or len(results['gt_bboxes']) != 1:
+        if 'poly' not in results or len(results['poly']) != 8:
             return results
-        minx, miny, maxx, maxy = results['gt_bboxes'][0].tolist()
-        box = [minx, miny, maxx, miny, maxx, maxy, minx, maxy]
+        box = results['poly']
 
         jitter_flag = np.random.random() > self.jitter_prob
 
