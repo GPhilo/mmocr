@@ -3,7 +3,6 @@ import warnings
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from mmcv.runner import BaseModule, Sequential
 
 from mmocr.models.builder import HEADS
@@ -71,7 +70,7 @@ class DBHead(HeadMixin, BaseModule):
         
         if not self.with_logits:
             self.binarize.append(nn.Sigmoid())
-        self.maybe_sigmoid = F.sigmoid if with_logits else _identity
+        self.maybe_sigmoid = torch.sigmoid if with_logits else _identity
 
 
         self.threshold = self._init_thr(in_channels)

@@ -1,7 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import cv2
 import numpy as np
-import torch.nn.functional as F
+import torch
 
 from mmocr.core import points2boundary
 from mmocr.models.builder import POSTPROCESSOR
@@ -45,7 +45,7 @@ class DBPostprocessor(BasePostprocessor):
         self.unclip_ratio = unclip_ratio
         self.epsilon_ratio = epsilon_ratio
         self.max_candidates = max_candidates
-        self.maybe_sigmoid = F.sigmoid if with_logits else _identity
+        self.maybe_sigmoid = torch.sigmoid if with_logits else _identity
 
     def __call__(self, preds):
         """

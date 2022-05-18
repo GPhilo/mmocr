@@ -45,7 +45,7 @@ class DBLoss(nn.Module):
         self.dice_loss = DiceLoss(eps=eps)
         self.with_logits = with_logits
         self.bce_fn = F.binary_cross_entropy_with_logits if with_logits else F.binary_cross_entropy
-        self.maybe_sigmoid = F.sigmoid if with_logits else _identity
+        self.maybe_sigmoid = torch.sigmoid if with_logits else _identity
 
     def bitmasks2tensor(self, bitmasks, target_sz):
         """Convert Bitmasks to tensor.
