@@ -1,12 +1,15 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import cv2
 import numpy as np
+import torch.nn.functional as F
 
 from mmocr.core import points2boundary
 from mmocr.models.builder import POSTPROCESSOR
 from .base_postprocessor import BasePostprocessor
 from .utils import box_score_fast, unclip
 
+def _identity(x):
+    return x
 
 @POSTPROCESSOR.register_module()
 class DBPostprocessor(BasePostprocessor):
@@ -33,6 +36,7 @@ class DBPostprocessor(BasePostprocessor):
                  unclip_ratio=1.5,
                  epsilon_ratio=0.01,
                  max_candidates=3000,
+                 with_logits=False,
                  **kwargs):
         super().__init__(text_repr_type)
         self.mask_thr = mask_thr
@@ -41,6 +45,7 @@ class DBPostprocessor(BasePostprocessor):
         self.unclip_ratio = unclip_ratio
         self.epsilon_ratio = epsilon_ratio
         self.max_candidates = max_candidates
+        self.maybe_sigmoid = F.sigmoid if with_logits else _identity
 
     def __call__(self, preds):
         """
@@ -52,7 +57,7 @@ class DBPostprocessor(BasePostprocessor):
         """
         assert preds.dim() == 3
 
-        prob_map = preds[0, :, :]
+        prob_map = self.maybe_sigmoid(preds[0, :, :])
         text_mask = prob_map > self.mask_thr
 
         score_map = prob_map.data.cpu().numpy().astype(np.float32)

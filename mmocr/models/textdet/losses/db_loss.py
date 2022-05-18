@@ -6,6 +6,8 @@ from torch import nn
 from mmocr.models.builder import LOSSES
 from mmocr.models.common.losses.dice_loss import DiceLoss
 
+def _identity(x):
+    return x
 
 @LOSSES.register_module()
 class DBLoss(nn.Module):
@@ -29,7 +31,8 @@ class DBLoss(nn.Module):
                  reduction='mean',
                  negative_ratio=3.0,
                  eps=1e-6,
-                 bbce_loss=False):
+                 bbce_loss=False,
+                 with_logits=False):
         super().__init__()
         assert reduction in ['mean',
                              'sum'], " reduction must in ['mean','sum']"
@@ -40,6 +43,9 @@ class DBLoss(nn.Module):
         self.eps = eps
         self.bbce_loss = bbce_loss
         self.dice_loss = DiceLoss(eps=eps)
+        self.with_logits = with_logits
+        self.bce_fn = F.binary_cross_entropy_with_logits if with_logits else F.binary_cross_entropy
+        self.maybe_sigmoid = F.sigmoid if with_logits else _identity
 
     def bitmasks2tensor(self, bitmasks, target_sz):
         """Convert Bitmasks to tensor.
@@ -87,8 +93,8 @@ class DBLoss(nn.Module):
             int(positive_count * self.negative_ratio))
 
         assert gt.max() <= 1 and gt.min() >= 0
-        assert pred.max() <= 1 and pred.min() >= 0
-        loss = F.binary_cross_entropy(pred, gt, reduction='none')
+        assert self.with_logits or (pred.max() <= 1 and pred.min() >= 0)
+        loss = self.bce_fn(pred, gt, reduction='none')
         positive_loss = loss * positive.float()
         negative_loss = loss * negative.float()
 
@@ -149,7 +155,7 @@ class DBLoss(nn.Module):
             loss_prob = self.balance_bce_loss(pred_prob, gt['gt_shrink'][0],
                                               gt['gt_shrink_mask'][0])
         else:
-            loss_prob = self.dice_loss(pred_prob, gt['gt_shrink'][0],
+            loss_prob = self.dice_loss(self.maybe_sigmoid(pred_prob), gt['gt_shrink'][0],
                                        gt['gt_shrink_mask'][0])
 
         loss_db = self.dice_loss(pred_db, gt['gt_shrink'][0],

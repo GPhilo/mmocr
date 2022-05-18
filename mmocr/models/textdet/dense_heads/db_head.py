@@ -3,11 +3,14 @@ import warnings
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from mmcv.runner import BaseModule, Sequential
 
 from mmocr.models.builder import HEADS
 from .head_mixin import HeadMixin
 
+def _identity(x):
+    return x
 
 @HEADS.register_module()
 class DBHead(HeadMixin, BaseModule):
@@ -36,6 +39,7 @@ class DBHead(HeadMixin, BaseModule):
             ],
             train_cfg=None,
             test_cfg=None,
+            with_logits=False,
             **kwargs):
         old_keys = ['text_repr_type', 'decoding_type']
         for key in old_keys:
@@ -55,6 +59,7 @@ class DBHead(HeadMixin, BaseModule):
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self.downsample_ratio = downsample_ratio
+        self.with_logits = with_logits
 
         self.binarize = Sequential(
             nn.Conv2d(
@@ -62,12 +67,17 @@ class DBHead(HeadMixin, BaseModule):
             nn.BatchNorm2d(in_channels // 4), nn.ReLU(inplace=True),
             nn.ConvTranspose2d(in_channels // 4, in_channels // 4, 2, 2),
             nn.BatchNorm2d(in_channels // 4), nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(in_channels // 4, 1, 2, 2), nn.Sigmoid())
+            nn.ConvTranspose2d(in_channels // 4, 1, 2, 2))
+        
+        if not self.with_logits:
+            self.binarize.append(nn.Sigmoid())
+        self.maybe_sigmoid = F.sigmoid if with_logits else _identity
+
 
         self.threshold = self._init_thr(in_channels)
 
     def diff_binarize(self, prob_map, thr_map, k):
-        return torch.reciprocal(1.0 + torch.exp(-k * (prob_map - thr_map)))
+        return torch.reciprocal(1.0 + torch.exp(-k * (self.maybe_sigmoid(prob_map) - thr_map)))
 
     def forward(self, inputs):
         """
