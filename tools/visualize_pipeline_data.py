@@ -15,10 +15,11 @@ plt.ion()
 def main():
     parser = argparse.ArgumentParser(description='Benchmark data loading')
     parser.add_argument('config', help='Train config file path.')
+    parser.add_argument('--split', default='train', choices=['train', 'test'], help='Which pipeline to load')
     args = parser.parse_args()
     cfg = Config.fromfile(args.config)
 
-    dataset = build_dataset(cfg.data.train)
+    dataset = build_dataset(cfg.data[args.split])
 
     # prepare data loaders
     if 'imgs_per_gpu' in cfg.data:
@@ -32,9 +33,9 @@ def main():
         dist=False,
         seed=None)
 
-    im_fig, im_ax = plt.subplots()
-    im_fig.suptitle('Image')
-    im = None
+    # im_fig, im_ax = plt.subplots()
+    # im_fig.suptitle('Image')
+    # im = None
 
     # Start progress bar after first 5 batches
     prog_bar = mmcv.ProgressBar(
@@ -46,10 +47,12 @@ def main():
             if i >= 5:
                 prog_bar.update()
             for batch_idx in range(len(data['img'].data[0])):
-                if im is None:
-                    im = im_ax.imshow((data['img'].data[idx][batch_idx].cpu().detach().numpy().transpose((1,2,0))*data['img_metas'].data[idx][batch_idx]['img_norm_cfg']['std']+data['img_metas'].data[idx][batch_idx]['img_norm_cfg']['mean'])/255)
-                else:
-                    im.set_data((data['img'].data[idx][batch_idx].cpu().detach().numpy().transpose((1,2,0))*data['img_metas'].data[idx][batch_idx]['img_norm_cfg']['std']+data['img_metas'].data[idx][batch_idx]['img_norm_cfg']['mean'])/255)
+                # if im is None:
+                #     im = im_ax.imshow((data['img'].data[idx][batch_idx].cpu().detach().numpy().transpose((1,2,0))*data['img_metas'].data[idx][batch_idx]['img_norm_cfg']['std']+data['img_metas'].data[idx][batch_idx]['img_norm_cfg']['mean'])/255)
+                #     im = im_ax.imshow(data['img'].data[idx][batch_idx].cpu().detach().numpy().transpose((1,2,0)))
+                # else:
+                #     im.set_data((data['img'].data[idx][batch_idx].cpu().detach().numpy().transpose((1,2,0))*data['img_metas'].data[idx][batch_idx]['img_norm_cfg']['std']+data['img_metas'].data[idx][batch_idx]['img_norm_cfg']['mean'])/255)
+                #     im.set_data(data['img'].data[idx][batch_idx].cpu().detach().numpy().transpose((1,2,0)))
                 input('Press ENTER to continue...')
         
 
